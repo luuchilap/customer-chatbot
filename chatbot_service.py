@@ -278,10 +278,11 @@ class MongoDBChatbotService:
     def _save_conversation_history(self, session_id: str, history: List[Dict], last_subject: Optional[str]):
         self.conversations_collection.update_one(
             {"session_id": session_id},
-            {"$set": {"history": history, "last_conversation_subject": last_subject, "updated_at": datetime.utcnow()}},
+            {"$set": {"history": history, "last_conversation_subject": last_subject,
+                      "updated_at": datetime.utcnow()}},
             upsert=True
         )
-        
+
     def get_all_sessions(self) -> List[Dict]:
         """Gets all conversation sessions, returning only essential info."""
         sessions = self.conversations_collection.find(
@@ -294,7 +295,6 @@ class MongoDBChatbotService:
             }
         ).sort("updated_at", -1)
         return list(sessions)
-
 
     def _get_last_subject(self, session_id: str) -> Optional[str]:
         conversation = self.conversations_collection.find_one({"session_id": session_id})
@@ -313,13 +313,12 @@ class MongoDBChatbotService:
                 last_subject = function_result["reference_product"].get("name")
         elif isinstance(function_result, list) and len(function_result) == 1 and name_field in function_result[0]:
             last_subject = function_result[0].get(name_field)
-        
+
         if last_subject:
             self.conversations_collection.update_one(
                 {"session_id": session_id},
                 {"$set": {"last_conversation_subject": last_subject}}
             )
-
 
     def chat(self, user_message: str, customer_name: str = "Guest", session_id: str = "default") -> str:
         conversation_history = self._get_conversation_history(session_id)
@@ -332,12 +331,12 @@ class MongoDBChatbotService:
                 return history
 
             trimmed_history = history[-max_length:]
-            
+
             # Ensure the first message is not a tool response without its call
             if trimmed_history and trimmed_history[0].get("role") == "tool":
                 # If the first message is a tool response, we need to find its call
                 # and include it, even if it exceeds the max length slightly.
-                
+
                 # The message right before the tool response should be the tool call
                 potential_tool_call_index = len(history) - max_length - 1
                 if potential_tool_call_index >= 0:
@@ -345,12 +344,11 @@ class MongoDBChatbotService:
                     if previous_message.get("role") == "assistant" and previous_message.get("tool_calls"):
                         # Prepend the tool call message to our trimmed history
                         trimmed_history.insert(0, previous_message)
-            
+
             return trimmed_history
 
         conversation_history = trim_history(conversation_history)
         # --- FIX END ---
-
 
         # Handle follow-up context
         follow_up_keywords = ['price', 'lower', 'higher', 'same', 'cost', 'cheaper', 'expensive']
@@ -396,7 +394,7 @@ class MongoDBChatbotService:
                     tool_calls_list = []
                     for tc in response_message.tool_calls:
                         tool_calls_list.append(tc.model_dump())
-                    
+
                     conversation_history.append({
                         "role": "assistant",
                         "content": None,
@@ -459,7 +457,7 @@ class MongoDBChatbotService:
 
             conversation_history[-1]['content'] = user_message
             conversation_history.append({"role": "assistant", "content": final_message})
-            
+
             self._save_conversation_history(session_id, conversation_history, last_subject)
             self.add_customer_inquiry(customer_name, user_message, final_message, session_id)
 
@@ -468,7 +466,7 @@ class MongoDBChatbotService:
         except Exception as e:
             logger.error(f"Chat error: {str(e)}")
             return "I'm sorry, I encountered an error processing your request. Please try again."
-        
+
     def reset_conversation(self, session_id: str = "default"):
         self.conversations_collection.delete_one({"session_id": session_id})
 
