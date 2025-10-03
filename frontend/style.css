@@ -172,18 +172,6 @@ body {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
-/* Style for images inside chat messages */
-.message.bot .message-content .chat-image {
-    max-width: 100%;
-    max-height: 250px; /* Constrain the height */
-    object-fit: contain; /* Ensure the image fits without distortion */
-    border-radius: 12px;
-    margin-top: 0.75rem;
-    display: block;
-    background-color: #f8fafc; /* Light background for transparent images */
-}
-
-
 .bot-avatar {
     width: 32px;
     height: 32px;
@@ -446,6 +434,36 @@ body {
     border-radius: 8px;
     margin-bottom: 1rem;
     border: 1px solid #feb2b2;
+}
+
+/* Image in Chat */
+.chat-image {
+    max-width: 100%;
+    border-radius: 12px;
+    margin-top: 0.75rem;
+    max-height: 250px;
+    object-fit: contain;
+}
+
+/* Table Styles */
+.chat-table {
+    width: 100%;
+    margin-top: 1rem;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+    border: 1px solid #e2e8f0;
+}
+
+.chat-table th,
+.chat-table td {
+    padding: 0.75rem;
+    text-align: left;
+    border: 1px solid #e2e8f0;
+}
+
+.chat-table th {
+    background: #f8fafc;
+    font-weight: 600;
 }
 
 /* Responsive Design */

@@ -73,6 +73,22 @@ class MongoDBChatbotService:
 
         # Category 2: Pricing & Comparison Tools
         pricing_tools = {
+            "get_top_k_products_by_price": {
+                "function": self.get_top_k_products_by_price,
+                "schema": {
+                    "name": "get_top_k_products_by_price",
+                    "description": "Gets a list or table of the top 'k' products sorted by price. Use this for queries like 'show me the top 5 most expensive phones'.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "k": {"type": "integer", "description": "The number of products to return."},
+                            "order": {"type": "string", "description": "Either 'highest' (for most expensive) or 'cheapest'.", "enum": ["highest", "cheapest"]},
+                            "category": {"type": "string", "description": "Optional category to filter by."}
+                        },
+                        "required": ["k", "order"]
+                    }
+                }
+            },
             "find_product_by_price_rank": {
                 "function": self.find_product_by_price_rank,
                 "schema": {
@@ -232,6 +248,26 @@ class MongoDBChatbotService:
         except Exception as e:
             logger.error(f"Error fetching product categories: {e}")
             return [{"error": "Could not retrieve product categories."}]
+
+    def get_top_k_products_by_price(self, k: int, order: str, category: str = None) -> List[Dict]:
+        if not isinstance(k, int) or k < 1:
+            return [{"error": "k must be a positive integer."}]
+        if order not in ['highest', 'cheapest']:
+            return [{"error": "Order must be either 'highest' or 'cheapest'."}]
+
+        name_field = self._get_product_name_field()
+        query_filter = {}
+        if category:
+            query_filter[name_field] = {"$regex": category, "$options": "i"}
+
+        sort_direction = -1 if order == 'highest' else 1
+        pipeline = [
+            {"$match": query_filter},
+            {"$addFields": {"numeric_price": {"$toDouble": "$price"}}},
+            {"$sort": {"numeric_price": sort_direction}},
+            {"$limit": k}
+        ]
+        return list(self.db.products.aggregate(pipeline))
 
     # Pricing & Comparison Methods
     def find_product_by_price_rank(self, rank: int, order: str, category: str = None) -> Dict:
@@ -405,6 +441,9 @@ class MongoDBChatbotService:
             10. CLARIFYING AMBIGUITIES: If a user query is ambiguous, ask for clarification instead of guessing.
             11. TOOL USAGE: Use the provided tools to fetch data. Do not make up information.
             12. CALCULATING TOTALS: When asked to calculate the total cost of multiple items, you MUST use the `calculate_order_total` tool. Respond with the initial cost, discount, and a breakdown of each item's price after discount. Respond with step-by-step calculations to persuade the user of your accuracy.
+            13. USER ORDERS: When a user asks about their orders, you MUST first use the `get_user_by_name` tool to find their user ID, then use the `get_user_order_history` tool to fetch their orders.
+            14. TABLE FORMATTING: If a user asks for a list or table of products, you MUST use the `get_top_k_products_by_price` tool and then format the entire response as a Markdown table.
+            15. Table and Image Exclusivity: When you generate a table of products, the table is the primary focus. Do NOT include any images of the products in your response to keep the output clean and focused.
 
             CRITICAL INSTRUCTIONS FOR RANKING QUERIES:
             - For price queries like "cheapest" or "most expensive", use the `find_product_by_price_rank` tool.

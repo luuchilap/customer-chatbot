@@ -217,7 +217,6 @@ class ChatBot {
                 contentDiv.classList.add('error-message');
             }
             
-            // Handle markdown-like formatting, including images
             contentDiv.innerHTML = this.formatMessage(content);
 
             messageDiv.appendChild(avatar);
@@ -235,7 +234,6 @@ class ChatBot {
             messageDiv.appendChild(avatar);
         }
 
-        // Remove welcome message if it exists
         const welcomeMessage = this.messagesContainer.querySelector('.welcome-message');
         if (welcomeMessage && sender === 'user') {
             welcomeMessage.style.animation = 'fadeOut 0.3s ease-out';
@@ -247,16 +245,48 @@ class ChatBot {
     }
 
     formatMessage(message) {
-        // The order of these replacements is important.
-        // First, handle the image markdown, which might contain newlines.
-        let formattedMessage = message.replace(/\!\[(.*?)\]\s*\((.*?)\)/g, '<img src="$2" alt="$1" class="chat-image">');
+        let formatted = message;
+    
+        // 1. Handle tables first with a more robust regex
+        // This regex handles multi-line tables and is more flexible with spacing.
+        const tableRegex = /^\|(.+)\r?\n\|( *[-:]+[-| :]*)\r?\n((?:\|.*(?:\r?\n|$))*)/gm;
+        formatted = formatted.replace(tableRegex, (match, headerContent, separator, bodyRows) => {
+            const headers = headerContent.split('|').map(h => h.trim()).filter(Boolean);
+            if (headers.length === 0) return match;
 
-        // Now, handle other markdown formatting on the remaining text.
-        return formattedMessage
+            let table = '<table class="chat-table">';
+            
+            // Header
+            table += '<thead><tr>';
+            headers.forEach(header => table += `<th>${header}</th>`);
+            table += '</tr></thead>';
+            
+            // Body
+            table += '<tbody>';
+            const rows = bodyRows.trim().split('\n').filter(r => r.trim());
+            rows.forEach(row => {
+                table += '<tr>';
+                const cells = row.split('|').slice(1, -1).map(c => c.trim());
+                // Ensure the number of cells matches the number of headers
+                if (cells.length === headers.length) {
+                    cells.forEach(cell => table += `<td>${cell}</td>`);
+                }
+            });
+            table += '</tbody></table>';
+            
+            return table;
+        });
+    
+        // 2. Handle images
+        const imageRegex = /!\[(.*?)\]\((.*?)\)/g;
+        formatted = formatted.replace(imageRegex, '<img src="$2" alt="$1" class="chat-image">');
+        
+        // 3. Handle other markdown AFTER structured content is parsed
+        return formatted
             .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
             .replace(/\*(.*?)\*/g, '<em>$1</em>')
-            .replace(/`(.*?)`/g, '<code>$1</code>')
-            .replace(/\n/g, '<br>'); // Handle newlines last.
+            .replace(/\n/g, '<br>')
+            .replace(/`(.*?)`/g, '<code>$1</code>');
     }
 
     scrollToBottom() {
@@ -282,7 +312,6 @@ class ChatBot {
             });
 
             if (response.ok) {
-                // Clear messages except welcome
                 const messages = this.messagesContainer.querySelectorAll('.message');
                 messages.forEach(msg => {
                     if (!msg.classList.contains('welcome-message')) {
@@ -290,10 +319,9 @@ class ChatBot {
                     }
                 });
 
-                // Show welcome message if hidden
                 const welcomeMessage = this.messagesContainer.querySelector('.welcome-message');
                 if (!welcomeMessage) {
-                    location.reload(); // Simple way to restore welcome message
+                    location.reload();
                 } else {
                     welcomeMessage.style.display = 'flex';
                 }
@@ -313,10 +341,8 @@ class ChatBot {
         errorDiv.className = 'error-message';
         errorDiv.textContent = message;
         
-        // Insert at the top of messages
         this.messagesContainer.insertBefore(errorDiv, this.messagesContainer.firstChild);
         
-        // Auto-remove after 5 seconds
         setTimeout(() => {
             errorDiv.style.animation = 'fadeOut 0.3s ease-out';
             setTimeout(() => errorDiv.remove(), 300);
@@ -324,7 +350,6 @@ class ChatBot {
     }
 }
 
-// CSS animation for fade out
 const style = document.createElement('style');
 style.textContent = `
     @keyframes fadeOut {
@@ -342,12 +367,10 @@ style.textContent = `
 `;
 document.head.appendChild(style);
 
-// Initialize the chatbot when the page loads
 document.addEventListener('DOMContentLoaded', () => {
     window.chatBot = new ChatBot();
 });
 
-// Handle page visibility for better UX
 document.addEventListener('visibilitychange', () => {
     if (!document.hidden && window.chatBot) {
         window.chatBot.checkServerStatus();
