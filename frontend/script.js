@@ -1,23 +1,13 @@
 class ChatBot {
     constructor() {
         this.apiUrl = 'http://localhost:8000';
-        this.sessionId = this.getSessionId();
+        this.sessionId = this.generateSessionId();
         this.customerName = 'Guest';
         
         this.initializeElements();
         this.bindEvents();
         this.showNameModal();
         this.checkServerStatus();
-        this.loadSessionHistory();
-    }
-
-    getSessionId() {
-        let sessionId = localStorage.getItem('chatbot_session_id');
-        if (!sessionId) {
-            sessionId = this.generateSessionId();
-            localStorage.setItem('chatbot_session_id', sessionId);
-        }
-        return sessionId;
     }
 
     generateSessionId() {
@@ -39,8 +29,6 @@ class ChatBot {
         this.saveNameBtn = document.getElementById('saveNameBtn');
         this.skipNameBtn = document.getElementById('skipNameBtn');
         this.thinkingIndicator = document.getElementById('thinkingIndicator');
-        this.sessionList = document.getElementById('sessionList');
-        this.newChatBtn = document.getElementById('newChatBtn');
     }
 
     bindEvents() {
@@ -60,11 +48,6 @@ class ChatBot {
         // Button events
         this.sendBtn.addEventListener('click', () => this.sendMessage());
         this.resetBtn.addEventListener('click', () => this.resetConversation());
-        
-        // --- FIX: Check if newChatBtn exists before adding event listener ---
-        if (this.newChatBtn) {
-            this.newChatBtn.addEventListener('click', () => this.startNewChat());
-        }
 
         // Name modal events
         this.saveNameBtn.addEventListener('click', () => this.saveName());
@@ -147,73 +130,6 @@ class ChatBot {
             this.showError('Unable to connect to server. Please check if the server is running.');
         }
     }
-    
-    async loadSessionHistory() {
-        // --- FIX: Check if sessionList exists before trying to use it ---
-        if (!this.sessionList) {
-            return;
-        }
-        
-        try {
-            const response = await fetch(`${this.apiUrl}/chat/history/all`);
-            if (!response.ok) throw new Error('Failed to fetch sessions');
-
-            const sessions = await response.json();
-            this.sessionList.innerHTML = ''; // Clear existing list
-            
-            sessions.forEach(session => {
-                const sessionDiv = document.createElement('div');
-                sessionDiv.className = 'session-item';
-                sessionDiv.textContent = session.history[0]?.content || 'New Chat';
-                sessionDiv.dataset.sessionId = session.session_id;
-
-                if (session.session_id === this.sessionId) {
-                    sessionDiv.classList.add('active');
-                }
-
-                sessionDiv.addEventListener('click', () => {
-                    this.switchSession(session.session_id);
-                });
-                
-                this.sessionList.appendChild(sessionDiv);
-            });
-        } catch (error) {
-            console.error('Error loading session history:', error);
-        }
-    }
-    
-    async loadChatHistory(sessionId) {
-        this.messagesContainer.innerHTML = ''; // Clear current messages
-        try {
-            const response = await fetch(`${this.apiUrl}/chat/history/${sessionId}`);
-            if (!response.ok) throw new Error('Failed to load chat history');
-
-            const data = await response.json();
-            data.history.forEach(msg => {
-                // We only care about user and assistant messages for display
-                if (msg.role === 'user' || msg.role === 'assistant') {
-                    this.addMessage(msg.content, msg.role);
-                }
-            });
-        } catch (error) {
-            console.error('Error loading chat history:', error);
-            this.addMessage('Could not load chat history.', 'bot', true);
-        }
-    }
-
-    switchSession(sessionId) {
-        this.sessionId = sessionId;
-        localStorage.setItem('chatbot_session_id', sessionId);
-        this.loadChatHistory(sessionId);
-        this.loadSessionHistory(); // To update active state
-    }
-
-    startNewChat() {
-        this.sessionId = this.generateSessionId();
-        localStorage.setItem('chatbot_session_id', this.sessionId);
-        this.messagesContainer.innerHTML = ''; // Clear messages
-        this.loadSessionHistory();
-    }
 
     showLoading() {
         // Show subtle thinking indicator
@@ -272,7 +188,6 @@ class ChatBot {
 
             // Add bot response to chat
             this.addMessage(data.response, 'bot');
-            this.loadSessionHistory(); // Update session list
             
         } catch (error) {
             console.error('Chat error:', error);
@@ -302,7 +217,7 @@ class ChatBot {
                 contentDiv.classList.add('error-message');
             }
             
-            // Handle markdown-like formatting
+            // Handle markdown-like formatting, including images
             contentDiv.innerHTML = this.formatMessage(content);
 
             messageDiv.appendChild(avatar);
@@ -332,12 +247,16 @@ class ChatBot {
     }
 
     formatMessage(message) {
-        // Basic formatting for bot messages
-        return message
+        // The order of these replacements is important.
+        // First, handle the image markdown, which might contain newlines.
+        let formattedMessage = message.replace(/\!\[(.*?)\]\s*\((.*?)\)/g, '<img src="$2" alt="$1" class="chat-image">');
+
+        // Now, handle other markdown formatting on the remaining text.
+        return formattedMessage
             .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
             .replace(/\*(.*?)\*/g, '<em>$1</em>')
-            .replace(/\n/g, '<br>')
-            .replace(/`(.*?)`/g, '<code>$1</code>');
+            .replace(/`(.*?)`/g, '<code>$1</code>')
+            .replace(/\n/g, '<br>'); // Handle newlines last.
     }
 
     scrollToBottom() {
@@ -363,7 +282,22 @@ class ChatBot {
             });
 
             if (response.ok) {
-                this.startNewChat(); // Start a new session
+                // Clear messages except welcome
+                const messages = this.messagesContainer.querySelectorAll('.message');
+                messages.forEach(msg => {
+                    if (!msg.classList.contains('welcome-message')) {
+                        msg.remove();
+                    }
+                });
+
+                // Show welcome message if hidden
+                const welcomeMessage = this.messagesContainer.querySelector('.welcome-message');
+                if (!welcomeMessage) {
+                    location.reload(); // Simple way to restore welcome message
+                } else {
+                    welcomeMessage.style.display = 'flex';
+                }
+
                 this.addMessage("Conversation reset! How can I help you?", 'bot');
             } else {
                 throw new Error('Failed to reset conversation');
@@ -419,3 +353,4 @@ document.addEventListener('visibilitychange', () => {
         window.chatBot.checkServerStatus();
     }
 });
+
