@@ -1,17 +1,40 @@
-from flask import Flask, request, jsonify
-from flask_cors import CORS
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from typing import Optional
 import os
 import logging
+from dotenv import load_dotenv
 from chatbot_service import MongoDBChatbotService
 
-app = Flask(__name__)
-CORS(app)
+# Load environment variables from .env file
+load_dotenv()
+
+app = FastAPI(title="MongoDB Chatbot API", version="1.0.0")
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Initialize chatbot service
 chatbot_service = None
+
+# Pydantic models
+class ChatRequest(BaseModel):
+    message: str
+    customer_name: Optional[str] = "Guest"
+    session_id: Optional[str] = "default"
+
+class ResetRequest(BaseModel):
+    session_id: Optional[str] = "default"
 
 def get_chatbot_service():
     global chatbot_service
@@ -28,70 +51,57 @@ def get_chatbot_service():
         )
     return chatbot_service
 
-@app.route('/health', methods=['GET'])
+@app.get('/health')
 def health_check():
     try:
         service = get_chatbot_service()
-        return jsonify({
+        return {
             "status": "healthy",
             "collections": service.get_available_collections(),
             "product_count": service.get_product_count()
-        }), 200
+        }
     except Exception as e:
         logger.error(f"Health check failed: {str(e)}")
-        return jsonify({"status": "unhealthy", "error": str(e)}), 500
+        raise HTTPException(status_code=500, detail=f"Health check failed: {str(e)}")
 
-@app.route('/chat', methods=['POST'])
-def chat():
+@app.post('/chat')
+def chat(request: ChatRequest):
     try:
-        data = request.get_json()
-        
-        if not data or 'message' not in data:
-            return jsonify({"error": "Missing 'message' in request body"}), 400
-        
-        message = data['message'].strip()
+        message = request.message.strip()
         if not message:
-            return jsonify({"error": "Message cannot be empty"}), 400
-        
-        customer_name = data.get('customer_name', 'Guest')
-        session_id = data.get('session_id', 'default')
+            raise HTTPException(status_code=400, detail="Message cannot be empty")
         
         service = get_chatbot_service()
-        response = service.chat(message, customer_name, session_id)
+        response = service.chat(message, request.customer_name, request.session_id)
         
-        return jsonify({
+        return {
             "response": response,
-            "session_id": session_id,
-            "customer_name": customer_name
-        }), 200
+            "session_id": request.session_id,
+            "customer_name": request.customer_name
+        }
         
     except Exception as e:
         logger.error(f"Chat error: {str(e)}")
-        return jsonify({"error": "Internal server error"}), 500
+        raise HTTPException(status_code=500, detail="Internal server error")
 
-@app.route('/chat/reset', methods=['POST'])
-def reset_conversation():
+@app.post('/chat/reset')
+def reset_conversation(request: ResetRequest):
     try:
-        data = request.get_json() or {}
-        session_id = data.get('session_id', 'default')
-        
         service = get_chatbot_service()
-        service.reset_conversation(session_id)
+        service.reset_conversation(request.session_id)
         
-        return jsonify({"message": "Conversation reset successfully"}), 200
+        return {"message": "Conversation reset successfully"}
         
     except Exception as e:
         logger.error(f"Reset error: {str(e)}")
-        return jsonify({"error": "Internal server error"}), 500
+        raise HTTPException(status_code=500, detail="Internal server error")
 
-@app.route('/products/search', methods=['GET'])
-def search_products():
+@app.get('/products/search')
+def search_products(q: str, limit: int = 10):
     try:
-        query = request.args.get('q', '').strip()
-        limit = int(request.args.get('limit', 10))
-        
+        query = q.strip()
         if not query:
-            return jsonify({"error": "Missing search query parameter 'q'"}), 400
+            raise HTTPException(status_code=400, detail="Missing search query parameter 'q'")
         
         if limit > 50:
             limit = 50
@@ -99,41 +109,40 @@ def search_products():
         service = get_chatbot_service()
         results = service.search_products_by_name(query, limit)
         
-        return jsonify({
+        return {
             "query": query,
             "results": results,
             "count": len(results)
-        }), 200
+        }
         
     except Exception as e:
         logger.error(f"Search error: {str(e)}")
-        return jsonify({"error": "Internal server error"}), 500
+        raise HTTPException(status_code=500, detail="Internal server error")
 
-@app.route('/products/<product_id>', methods=['GET'])
-def get_product(product_id):
+@app.get('/products/{product_id}')
+def get_product(product_id: str):
     try:
         service = get_chatbot_service()
         result = service.get_product_by_id(product_id)
         
         if "error" in result:
-            return jsonify(result), 404
+            raise HTTPException(status_code=404, detail=result["error"])
             
-        return jsonify(result), 200
+        return result
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Get product error: {str(e)}")
-        return jsonify({"error": "Internal server error"}), 500
-
-@app.errorhandler(404)
-def not_found(error):
-    return jsonify({"error": "Endpoint not found"}), 404
-
-@app.errorhandler(500)
-def internal_error(error):
-    return jsonify({"error": "Internal server error"}), 500
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    debug = os.environ.get('DEBUG', 'False').lower() == 'true'
+    import uvicorn
+    port = int(os.environ.get('PORT', 8000))
     
-    app.run(host='0.0.0.0', port=port, debug=debug)
+    uvicorn.run(
+        "app:app",
+        host='0.0.0.0',
+        port=port,
+        reload=os.environ.get('DEBUG', 'False').lower() == 'true'
+    )

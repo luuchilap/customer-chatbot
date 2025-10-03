@@ -1,6 +1,6 @@
 class ChatBot {
     constructor() {
-        this.apiUrl = 'http://localhost:5000';
+        this.apiUrl = 'http://localhost:8000';
         this.sessionId = this.generateSessionId();
         this.customerName = 'Guest';
         
