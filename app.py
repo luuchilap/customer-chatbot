@@ -64,6 +64,28 @@ def health_check():
         logger.error(f"Health check failed: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Health check failed: {str(e)}")
 
+@app.get('/chat/history/all')
+def get_all_chat_sessions():
+    """Retrieves all chat sessions with their first message."""
+    try:
+        service = get_chatbot_service()
+        sessions = service.get_all_sessions()
+        return sessions
+    except Exception as e:
+        logger.error(f"Error fetching all sessions: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get('/chat/history/{session_id}')
+def get_chat_history(session_id: str):
+    try:
+        service = get_chatbot_service()
+        history = service._get_conversation_history(session_id)
+        return {"session_id": session_id, "history": history}
+    except Exception as e:
+        logger.error(f"Error fetching chat history: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
 @app.post('/chat')
 def chat(request: ChatRequest):
     try:
