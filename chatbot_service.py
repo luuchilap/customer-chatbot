@@ -121,6 +121,24 @@ class MongoDBChatbotService:
                         "required": ["comparison_type"]
                     }
                 }
+            },
+            "calculate_order_total": {
+                "function": self.calculate_order_total,
+                "schema": {
+                    "name": "calculate_order_total",
+                    "description": "Calculates the final, discounted total cost for a list of products. Use this when a user asks for the total price of buying multiple items.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "product_names": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "A list of the names of products to include in the calculation."
+                            }
+                        },
+                        "required": ["product_names"]
+                    }
+                }
             }
         }
 
@@ -286,6 +304,34 @@ class MongoDBChatbotService:
             cursor = cursor.sort(sort_order)
         return {"reference_product": {"name": reference_name, "price": reference_price}, "comparison_type": comparison_type, "matching_products": list(cursor)}
 
+    def calculate_order_total(self, product_names: List[str]) -> Dict:
+        total_cost = 0
+        calculated_items = []
+        not_found_items = []
+        name_field = self._get_product_name_field()
+
+        for name in product_names:
+            product = self.db.products.find_one({name_field: {"$regex": name, "$options": "i"}})
+            if product and 'price' in product and 'discountPercentage' in product:
+                price = product['price']
+                discount = product['discountPercentage']
+                final_price = price * (1 - discount / 100)
+                total_cost += final_price
+                calculated_items.append({
+                    "name": product[name_field],
+                    "original_price": price,
+                    "discount_percentage": discount,
+                    "final_price": round(final_price, 2)
+                })
+            else:
+                not_found_items.append(name)
+        
+        return {
+            "total_cost": round(total_cost, 2),
+            "calculated_items": calculated_items,
+            "not_found_items": not_found_items
+        }
+
     # User & Order Management Methods
     def get_user_by_name(self, customer_name: str) -> Dict:
         try:
@@ -347,16 +393,18 @@ class MongoDBChatbotService:
             "content": """You are a helpful customer service chatbot with access to a product database.
             
             CRITICAL INSTRUCTIONS:
-            1. Use IDs for Follow-ups: When you list products, ALWAYS include their name/title and their unique `_id`.
-            2. DILIGENT LIST PROCESSING: When a tool returns multiple products, iterate through EVERY item and display name/title and price.
-            3. MAINTAINING CONTEXT: Apply context for ranking questions after listing categories.
-            4. DISPLAY IMAGES: If a product has a 'thumbnail' URL, you MUST display it. The markdown for the image, `![Product Image](URL)`, MUST be on its own separate line and NOT part of a list (no leading `-` or `*`).
-            5. RESPONSE FORMATTING: Do not use Markdown headings (e.g., '#', '##', '###'). Use bold text (`**text**`) for titles or emphasis instead.
-            6. AVOID GENERIC RESPONSES: Do not use phrases like "As an AI language model...". Always provide a direct answer.
-            7. HANDLING NO RESULTS: If a tool returns no results, respond with "Sorry, I couldn't find any products matching your criteria."
-            8. ERROR HANDLING: If a tool returns an error, include the error message in your response.
-            9. CLARIFYING AMBIGUITIES: If a user query is ambiguous, ask for clarification instead of guessing.
-            10. TOOL USAGE: Use the provided tools to fetch data. Do not make up information.
+            1. SCOPE OF KNOWLEDGE: You ONLY answer questions related to products, categories, pricing, discounts, user accounts, and order history. If a user asks a question outside of this scope (e.g., math, geography, general knowledge), you MUST politely decline by responding with: "I'm sorry, I can only assist with questions about our products and services." Do not attempt to answer the off-topic question.
+            2. Use IDs for Follow-ups: When you list products, ALWAYS include their name/title and their unique `_id`.
+            3. DILIGENT LIST PROCESSING: When a tool returns multiple products, iterate through EVERY item and display name/title and price.
+            4. MAINTAINING CONTEXT: Apply context for ranking questions after listing categories.
+            5. DISPLAY IMAGES: If a product has a 'thumbnail' URL, you MUST display it. The markdown for the image, `![Product Image](URL)`, MUST be on its own separate line and NOT part of a list (no leading `-` or `*`).
+            6. RESPONSE FORMATTING: Do not use Markdown headings (e.g., '#', '##', '###'). Use bold text (`**text**`) for titles or emphasis instead.
+            7. AVOID GENERIC RESPONSES: Do not use phrases like "As an AI language model...". Always provide a direct answer.
+            8. HANDLING NO RESULTS: If a tool returns no results, respond with "Sorry, I couldn't find any products matching your criteria."
+            9. ERROR HANDLING: If a tool returns an error, include the error message in your response.
+            10. CLARIFYING AMBIGUITIES: If a user query is ambiguous, ask for clarification instead of guessing.
+            11. TOOL USAGE: Use the provided tools to fetch data. Do not make up information.
+            12. CALCULATING TOTALS: When asked to calculate the total cost of multiple items, you MUST use the `calculate_order_total` tool. Respond with the initial cost, discount, and a breakdown of each item's price after discount. Respond with step-by-step calculations to persuade the user of your accuracy.
 
             CRITICAL INSTRUCTIONS FOR RANKING QUERIES:
             - For price queries like "cheapest" or "most expensive", use the `find_product_by_price_rank` tool.
