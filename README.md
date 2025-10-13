@@ -20,7 +20,8 @@ cp .env.example .env
 
 4. Run the server:
 ```bash
-python app.py
+py app.py #for backend
+python frontend_server.py #for frontend
 ```
 
 ## API Endpoints

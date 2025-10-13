@@ -242,13 +242,33 @@ class ChatBot {
 
         this.messagesContainer.appendChild(messageDiv);
         this.scrollToBottom();
+
+        // Check if the new message contains a chart and attach events
+        const chartContainer = messageDiv.querySelector('.vertical-chart-container');
+        if (chartContainer) {
+            this.attachChartEvents(chartContainer);
+        }
     }
 
     formatMessage(message) {
+        let potentialJson = message.trim();
+        if (potentialJson.startsWith('```json')) {
+            potentialJson = potentialJson.substring(7, potentialJson.length - 3).trim();
+        } else if (potentialJson.startsWith('```')) {
+            potentialJson = potentialJson.substring(3, potentialJson.length - 3).trim();
+        }
+
+        try {
+            const chartData = JSON.parse(potentialJson);
+            if (chartData.type === 'bar_chart') {
+                return this.renderBarChart(chartData);
+            }
+        } catch (e) {
+            // Not a JSON, so format as markdown
+        }
+
         let formatted = message;
     
-        // 1. Handle tables first with a more robust regex
-        // This regex handles multi-line tables and is more flexible with spacing.
         const tableRegex = /^\|(.+)\r?\n\|( *[-:]+[-| :]*)\r?\n((?:\|.*(?:\r?\n|$))*)/gm;
         formatted = formatted.replace(tableRegex, (match, headerContent, separator, bodyRows) => {
             const headers = headerContent.split('|').map(h => h.trim()).filter(Boolean);
@@ -256,18 +276,15 @@ class ChatBot {
 
             let table = '<table class="chat-table">';
             
-            // Header
             table += '<thead><tr>';
             headers.forEach(header => table += `<th>${header}</th>`);
             table += '</tr></thead>';
             
-            // Body
             table += '<tbody>';
             const rows = bodyRows.trim().split('\n').filter(r => r.trim());
             rows.forEach(row => {
                 table += '<tr>';
                 const cells = row.split('|').slice(1, -1).map(c => c.trim());
-                // Ensure the number of cells matches the number of headers
                 if (cells.length === headers.length) {
                     cells.forEach(cell => table += `<td>${cell}</td>`);
                 }
@@ -277,16 +294,93 @@ class ChatBot {
             return table;
         });
     
-        // 2. Handle images
         const imageRegex = /!\[(.*?)\]\((.*?)\)/g;
         formatted = formatted.replace(imageRegex, '<img src="$2" alt="$1" class="chat-image">');
         
-        // 3. Handle other markdown AFTER structured content is parsed
         return formatted
             .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
             .replace(/\*(.*?)\*/g, '<em>$1</em>')
             .replace(/\n/g, '<br>')
             .replace(/`(.*?)`/g, '<code>$1</code>');
+    }
+
+    renderBarChart(chartData) {
+        const labels = chartData.data.labels;
+        const data = chartData.data.datasets[0].data;
+    
+        if (data.length === 0) {
+            return `<p>I couldn't find any prices for the requested items.</p>`;
+        }
+    
+        const maxValue = Math.max(...data);
+        const topValue = Math.ceil(maxValue / 10) * 10;
+        const numGridLines = 5;
+        const colors = ['#f59e0b', '#3b82f6', '#ef4444', '#f97316', '#8b5cf6'];
+    
+        let yAxisHtml = '<div class="chart-y-axis">';
+        for (let i = numGridLines; i >= 0; i--) {
+            const value = Math.round((topValue / numGridLines) * i);
+            yAxisHtml += `<span>$${value}</span>`;
+        }
+        yAxisHtml += '</div>';
+    
+        let barsHtml = `<div class="chart-grid" style="--num-items: ${labels.length}">`;
+        for (let i = 0; i < numGridLines; i++) {
+            barsHtml += '<div class="chart-grid-line"></div>';
+        }
+        labels.forEach((label, index) => {
+            const value = data[index];
+            const heightPercentage = topValue > 0 ? (value / topValue) * 100 : 0;
+            const color = colors[index % colors.length];
+            barsHtml += `
+                <div class="chart-bar-wrapper">
+                    <div class="chart-tooltip">${label}: $${value}</div>
+                    <div class="chart-bar" style="height: ${heightPercentage}%; background-color: ${color};"></div>
+                </div>
+            `;
+        });
+        barsHtml += '</div>';
+    
+        let xAxisHtml = `<div class="chart-x-axis" style="--num-items: ${labels.length}">`;
+        labels.forEach(label => {
+            xAxisHtml += `<span>${label}</span>`;
+        });
+        xAxisHtml += '</div>';
+    
+        let notFoundHtml = '';
+        if (chartData.not_found && chartData.not_found.length > 0) {
+            notFoundHtml = `<p class="not-found-message">Could not find prices for: ${chartData.not_found.join(', ')}</p>`;
+        }
+    
+        return `
+            <div class="vertical-chart-container">
+                <div class="chart-body">
+                    ${yAxisHtml}
+                    <div class="chart-main">
+                        ${barsHtml}
+                        ${xAxisHtml}
+                    </div>
+                </div>
+                ${notFoundHtml}
+            </div>
+        `;
+    }
+
+    attachChartEvents(chartContainer) {
+        const wrappers = chartContainer.querySelectorAll('.chart-bar-wrapper');
+        wrappers.forEach(wrapper => {
+            const tooltip = wrapper.querySelector('.chart-tooltip');
+            wrapper.addEventListener('mousemove', (e) => {
+                tooltip.style.left = `${e.pageX + 15}px`;
+                tooltip.style.top = `${e.pageY + 15}px`;
+            });
+            wrapper.addEventListener('mouseenter', () => {
+                tooltip.classList.add('visible');
+            });
+            wrapper.addEventListener('mouseleave', () => {
+                tooltip.classList.remove('visible');
+            });
+        });
     }
 
     scrollToBottom() {
@@ -376,4 +470,3 @@ document.addEventListener('visibilitychange', () => {
         window.chatBot.checkServerStatus();
     }
 });
-

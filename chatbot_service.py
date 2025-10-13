@@ -155,6 +155,24 @@ class MongoDBChatbotService:
                         "required": ["product_names"]
                     }
                 }
+            },
+            "get_product_prices_for_chart": {
+                "function": self.get_product_prices_for_chart,
+                "schema": {
+                    "name": "get_product_prices_for_chart",
+                    "description": "Get product prices for a list of product names to generate a comparison chart.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "product_names": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "A list of product names to fetch prices for."
+                            }
+                        },
+                        "required": ["product_names"]
+                    }
+                }
             }
         }
 
@@ -224,7 +242,7 @@ class MongoDBChatbotService:
         sample_product = self.db.products.find_one(projection={"name": 1, "title": 1})
         self._product_name_field = "name" if sample_product and "name" in sample_product else "title"
         return self._product_name_field
-        
+
     def get_available_collections(self) -> List[str]:
         return self.db.list_collection_names()
 
@@ -368,6 +386,30 @@ class MongoDBChatbotService:
             "not_found_items": not_found_items
         }
 
+    def get_product_prices_for_chart(self, product_names: List[str]) -> Dict:
+        prices = []
+        not_found = []
+        name_field = self._get_product_name_field()
+        for name in product_names:
+            product = self.db.products.find_one({name_field: {"$regex": name, "$options": "i"}}, {"price": 1, name_field: 1})
+            if product and 'price' in product:
+                prices.append({"name": product[name_field], "price": product["price"]})
+            else:
+                not_found.append(name)
+        
+        chart_data = {
+            "type": "bar_chart",
+            "data": {
+                "labels": [item["name"] for item in prices],
+                "datasets": [{
+                    "label": "Price",
+                    "data": [item["price"] for item in prices]
+                }]
+            },
+            "not_found": not_found
+        }
+        return chart_data
+
     # User & Order Management Methods
     def get_user_by_name(self, customer_name: str) -> Dict:
         try:
@@ -376,7 +418,7 @@ class MongoDBChatbotService:
         except Exception as e:
             logger.error(f"Error fetching user {customer_name}: {e}")
             return {"error": f"Could not retrieve user data for {customer_name}."}
-            
+
     def get_user_order_history(self, user_id: str) -> List[Dict]:
         try:
             return list(self.db.orders.find({"userId": ObjectId(user_id)}))
@@ -444,6 +486,7 @@ class MongoDBChatbotService:
             13. USER ORDERS: When a user asks about their orders, you MUST first use the `get_user_by_name` tool to find their user ID, then use the `get_user_order_history` tool to fetch their orders.
             14. TABLE FORMATTING: If a user asks for a list or table of products, you MUST use the `get_top_k_products_by_price` tool and then format the entire response as a Markdown table.
             15. Table and Image Exclusivity: When you generate a table of products, the table is the primary focus. Do NOT include any images of the products in your response to keep the output clean and focused.
+            16. CHARTING: When a user asks for a bar chart of prices for multiple items, you MUST use the `get_product_prices_for_chart` tool.
 
             CRITICAL INSTRUCTIONS FOR RANKING QUERIES:
             - For price queries like "cheapest" or "most expensive", use the `find_product_by_price_rank` tool.
@@ -461,15 +504,19 @@ class MongoDBChatbotService:
                 )
                 response_message = response.choices[0].message
                 if response_message.tool_calls:
-                    conversation_history.append({"role": "assistant", "content": None, "tool_calls": response_message.tool_calls})
-                    for tool_call in response_message.tool_calls:
-                        function_name = tool_call.function.name
-                        function_args = json.loads(tool_call.function.arguments)
-                        function_response = self.execute_function(function_name, function_args)
+                    tool_call = response_message.tool_calls[0]
+                    function_name = tool_call.function.name
+                    function_args = json.loads(tool_call.function.arguments)
+                    function_response = self.execute_function(function_name, function_args)
+
+                    if function_name == 'get_product_prices_for_chart':
+                        final_message = json.dumps(function_response)
+                    else:
+                        conversation_history.append({"role": "assistant", "content": None, "tool_calls": [tool_call]})
                         self._update_conversation_subject(session_id, function_response)
                         conversation_history.append({"role": "tool", "tool_call_id": tool_call.id, "content": bson_dumps(function_response)})
-                    second_response = self.openai_client.chat.completions.create(model="gpt-3.5-turbo", messages=[system_message] + conversation_history)
-                    final_message = second_response.choices[0].message.content
+                        second_response = self.openai_client.chat.completions.create(model="gpt-3.5-turbo", messages=[system_message] + conversation_history)
+                        final_message = second_response.choices[0].message.content
                 else:
                     final_message = response_message.content
             else:
@@ -489,4 +536,3 @@ class MongoDBChatbotService:
 
     def close(self):
         self.client.close()
-
