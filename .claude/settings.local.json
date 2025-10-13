@@ -1,7 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "Bash(\"C:\\Users\\ADMIN\\AppData\\Local\\Programs\\Python\\Python313\\python.exe\" mcp_server.py --help)"
     ],
     "deny": [],
     "ask": []

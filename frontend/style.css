@@ -436,6 +436,161 @@ body {
     border: 1px solid #feb2b2;
 }
 
+/* Image in Chat */
+.chat-image {
+    max-width: 100%;
+    border-radius: 12px;
+    margin-top: 0.75rem;
+    max-height: 250px;
+    object-fit: contain;
+}
+
+/* Table Styles */
+.chat-table {
+    width: 100%;
+    margin-top: 1rem;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+    border: 1px solid #e2e8f0;
+}
+
+.chat-table th,
+.chat-table td {
+    padding: 0.75rem;
+    text-align: left;
+    border: 1px solid #e2e8f0;
+}
+
+.chat-table th {
+    background: #f8fafc;
+    font-weight: 600;
+}
+
+/* Bar Chart Styles */
+.vertical-chart-container {
+    width: 100%;
+    max-width: 400px;
+    margin: 1rem auto 0 auto;
+    font-size: 12px;
+}
+
+.chart-body {
+    display: flex;
+    height: 250px;
+    margin-top: 1rem;
+}
+
+.chart-y-axis {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    text-align: right;
+    padding-right: 8px;
+    color: #64748b;
+    height: 100%;
+}
+
+.chart-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    border-left: 1px solid #e2e8f0;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.chart-grid {
+    flex: 1;
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(var(--num-items, 1), 1fr);
+    align-items: flex-end;
+    padding: 0 10px;
+    gap: 10px;
+}
+
+.chart-grid-line {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background-color: #f1f5f9;
+    z-index: 1;
+}
+
+.chart-grid-line:nth-child(1) { bottom: 20%; }
+.chart-grid-line:nth-child(2) { bottom: 40%; }
+.chart-grid-line:nth-child(3) { bottom: 60%; }
+.chart-grid-line:nth-child(4) { bottom: 80%; }
+.chart-grid-line:nth-child(5) { bottom: 100%; }
+
+.chart-bar-wrapper {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    height: 100%;
+    align-items: flex-end;
+    z-index: 2;
+}
+
+.chart-bar {
+    width: 100%;
+    border-radius: 4px 4px 0 0;
+    transition: filter 0.2s ease;
+    animation: grow 0.5s ease-out;
+}
+
+.chart-bar-wrapper:hover .chart-bar {
+    filter: brightness(1.1);
+}
+
+.chart-tooltip {
+    position: fixed; /* Changed to fixed */
+    background-color: #2d3748;
+    color: white;
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    white-space: nowrap;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s ease;
+    z-index: 101000; /* High z-index to appear on top */
+    pointer-events: none; /* Tooltip should not be interactive */
+}
+
+.chart-tooltip.visible {
+    opacity: 1;
+    visibility: visible;
+}
+
+@keyframes grow {
+    from { height: 0%; }
+}
+
+.chart-x-axis {
+    display: grid;
+    grid-template-columns: repeat(var(--num-items, 1), 1fr);
+    padding: 8px 10px 0 10px;
+    color: #475569;
+    gap: 10px;
+}
+
+.chart-x-axis span {
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 11px;
+}
+
+.not-found-message {
+    font-size: 0.9rem;
+    color: #718096;
+    margin-top: 1rem;
+    text-align: center;
+}
+
+
 /* Responsive Design */
 @media (max-width: 768px) {
     .chat-container {
