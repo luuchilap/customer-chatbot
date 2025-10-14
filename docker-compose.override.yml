@@ -1,0 +1,26 @@
+# Development overrides for docker-compose.yml
+# This file is automatically loaded by docker-compose
+# Use: docker-compose -f docker-compose.yml -f docker-compose.override.yml up
+
+version: '3.8'
+
+services:
+  # Override API service for development
+  api:
+    environment:
+      - DEBUG=true
+      - MONGO_URI=${MONGO_URI}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    volumes:
+      - .:/app
+      - ./logs:/app/logs
+    command: ["python", "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+
+  # Override frontend for development (hot reload)
+  frontend:
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro
+    ports:
+      - "4000:80"
+      - "3000:3000"  # Additional port for development server

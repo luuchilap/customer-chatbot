@@ -5,7 +5,7 @@ from typing import Optional
 import os
 import logging
 from dotenv import load_dotenv
-from chatbot_service import MongoDBChatbotService
+from backend.chatbot_service import MongoDBChatbotService
 
 # Load environment variables from .env file
 load_dotenv()
@@ -32,6 +32,8 @@ class ChatRequest(BaseModel):
     message: str
     customer_name: Optional[str] = "Guest"
     session_id: Optional[str] = "default"
+    include_reasoning: Optional[bool] = False
+    use_chain: Optional[bool] = False
 
 class ResetRequest(BaseModel):
     session_id: Optional[str] = "default"
@@ -94,7 +96,28 @@ def chat(request: ChatRequest):
             raise HTTPException(status_code=400, detail="Message cannot be empty")
         
         service = get_chatbot_service()
-        response = service.chat(message, request.customer_name, request.session_id)
+        if request.use_chain:
+            response = service.chat_sequential(
+                message,
+                request.customer_name,
+                request.session_id,
+                include_reasoning=request.include_reasoning,
+            )
+        else:
+            response = service.chat(
+                message,
+                request.customer_name,
+                request.session_id,
+                include_reasoning=request.include_reasoning,
+            )
+
+        if isinstance(response, dict) and "answer" in response:
+            return {
+                "response": response["answer"],
+                "reasoning": response.get("reasoning", []),
+                "session_id": request.session_id,
+                "customer_name": request.customer_name,
+            }
         
         return {
             "response": response,

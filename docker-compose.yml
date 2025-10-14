@@ -1,0 +1,65 @@
+version: '3.8'
+
+services:
+  # MongoDB Atlas (Cloud Database)
+  # Note: Using MongoDB Atlas instead of local MongoDB container
+  # Make sure your Atlas cluster allows connections from 0.0.0.0/0 or your server IP
+
+  # FastAPI Web Server
+  api:
+    build: .
+    container_name: chatbot-api
+    restart: unless-stopped
+    environment:
+      - MONGO_URI=${MONGO_URI}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - PORT=8000
+      - DEBUG=false
+    ports:
+      - "8000:8000"
+    networks:
+      - chatbot-network
+    volumes:
+      - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+
+  # Frontend Server (Static Files)
+  frontend:
+    image: nginx:alpine
+    container_name: chatbot-frontend
+    restart: unless-stopped
+    ports:
+      - "4000:80"
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - api
+    networks:
+      - chatbot-network
+
+  # MongoDB Express (Database Admin UI) - Optional
+  # Note: MongoDB Express doesn't work well with Atlas clusters
+  # Use MongoDB Compass or Atlas web interface instead
+  # mongo-express:
+  #   image: mongo-express:1.0.2
+  #   container_name: mongodb-express
+  #   restart: unless-stopped
+  #   environment:
+  #     ME_CONFIG_MONGODB_URL: ${MONGO_URI}
+  #     ME_CONFIG_BASICAUTH_USERNAME: admin
+  #     ME_CONFIG_BASICAUTH_PASSWORD: admin123
+  #   ports:
+  #     - "8081:8081"
+  #   networks:
+  #     - chatbot-network
+
+networks:
+  chatbot-network:
+    driver: bridge

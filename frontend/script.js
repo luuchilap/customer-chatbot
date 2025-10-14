@@ -170,7 +170,8 @@ class ChatBot {
                 body: JSON.stringify({
                     message: message,
                     customer_name: this.customerName,
-                    session_id: this.sessionId
+                    session_id: this.sessionId,
+                    include_reasoning: true
                 })
             });
 
@@ -187,7 +188,10 @@ class ChatBot {
             }
 
             // Add bot response to chat
-            this.addMessage(data.response, 'bot');
+            const messageId = this.addMessage(data.response, 'bot');
+            if (Array.isArray(data.reasoning) && data.reasoning.length > 0) {
+                this.attachReasoning(messageId, data.reasoning);
+            }
             
         } catch (error) {
             console.error('Chat error:', error);
@@ -205,6 +209,8 @@ class ChatBot {
     addMessage(content, sender, isError = false) {
         const messageDiv = document.createElement('div');
         messageDiv.className = `message ${sender}`;
+        const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+        messageDiv.dataset.messageId = messageId;
 
         if (sender === 'bot') {
             const avatar = document.createElement('div');
@@ -248,6 +254,42 @@ class ChatBot {
         if (chartContainer) {
             this.attachChartEvents(chartContainer);
         }
+        return messageId;
+    }
+
+    attachReasoning(messageId, reasoning) {
+        const container = this.messagesContainer.querySelector(`[data-message-id="${messageId}"] .message-content`);
+        if (!container) return;
+
+        const details = document.createElement('details');
+        details.className = 'reasoning-trace';
+        const summary = document.createElement('summary');
+        summary.textContent = 'Show reasoning steps';
+        details.appendChild(summary);
+
+        const list = document.createElement('ol');
+        reasoning.forEach((step, idx) => {
+            const li = document.createElement('li');
+            const tool = step.tool || 'tool';
+            const input = typeof step.input === 'object' ? JSON.stringify(step.input) : (step.input ?? '');
+            let observation = step.observation;
+            if (typeof observation === 'object') {
+                try { observation = JSON.stringify(observation); } catch {}
+            }
+            li.innerHTML = `<strong>${tool}</strong> → <code>${this.escapeHtml(input)}</code><br>${this.escapeHtml(String(observation ?? ''))}`;
+            list.appendChild(li);
+        });
+        details.appendChild(list);
+        container.appendChild(details);
+    }
+
+    escapeHtml(str) {
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
     }
 
     formatMessage(message) {
