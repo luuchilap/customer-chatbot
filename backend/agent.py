@@ -28,6 +28,8 @@ def build_agent(
         verbose=False,
         return_intermediate_steps=True,
         memory=memory,
+        max_iterations=5,  # Prevent infinite loops
+        early_stopping_method="generate",  # Stop early if agent generates final answer
     )
 
 

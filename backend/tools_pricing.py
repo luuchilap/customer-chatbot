@@ -4,7 +4,8 @@ from typing import Any, Dict, List, Optional
 def get_top_k_products_by_price(db, name_field: str, k: int, order: str, category: Optional[str] = None) -> List[Dict]:
     query_filter: Dict[str, Any] = {}
     if category:
-        query_filter[name_field] = {"$regex": category, "$options": "i"}
+        # Use exact category match (semantic matching should be done before calling this function)
+        query_filter["category"] = category
     sort_direction = -1 if order == "highest" else 1
     pipeline = [
         {"$match": query_filter},
@@ -18,7 +19,8 @@ def get_top_k_products_by_price(db, name_field: str, k: int, order: str, categor
 def find_product_by_price_rank(db, name_field: str, rank: int, order: str, category: Optional[str] = None) -> Dict:
     query_filter: Dict[str, Any] = {}
     if category:
-        query_filter[name_field] = {"$regex": category, "$options": "i"}
+        # Use exact category match (semantic matching should be done before calling this function)
+        query_filter["category"] = category
     sort_direction = -1 if order == "highest" else 1
     pipeline = [
         {"$match": query_filter},
@@ -34,7 +36,8 @@ def find_product_by_price_rank(db, name_field: str, rank: int, order: str, categ
 def find_product_by_discount_rank(db, name_field: str, rank: int, order: str, category: Optional[str] = None) -> Dict:
     query_filter: Dict[str, Any] = {}
     if category:
-        query_filter[name_field] = {"$regex": category, "$options": "i"}
+        # Use exact category match (semantic matching should be done before calling this function)
+        query_filter["category"] = category
     sort_direction = -1 if order == "highest" else 1
     pipeline = [
         {"$match": query_filter},
@@ -115,11 +118,31 @@ def get_product_prices_for_chart(db, name_field: str, product_names: List[str]) 
 def find_products_within_budget(db, name_field: str, budget: float, category: Optional[str], limit: int) -> Dict:
     query: Dict[str, Any] = {"price": {"$lte": float(budget)}}
     if category:
-        query[name_field] = {"$regex": category, "$options": "i"}
+        # Use exact category match (semantic matching should be done before calling this function)
+        query["category"] = category
+    
     cursor = db.products.find(query).sort([("price", -1)]).limit(limit)
     results = list(cursor)
+    
     if not results:
-        return {"message": "No products found within the given budget."}
+        # Provide more helpful response with suggestions
+        suggestions = []
+        if category:
+            suggestions.append(f"Try searching without the '{category}' category filter")
+            suggestions.append(f"Try increasing your budget above ${budget}")
+            suggestions.append("Try searching for specific product names")
+        else:
+            suggestions.append(f"Try increasing your budget above ${budget}")
+            suggestions.append("Try searching for specific product names")
+        
+        return {
+            "message": f"No products found within the given budget of ${budget}.",
+            "suggestions": suggestions,
+            "budget": float(budget),
+            "category": category,
+            "results": []
+        }
+    
     return {"budget": float(budget), "results": results}
 
 

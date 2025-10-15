@@ -19,7 +19,11 @@ def get_system_instructions() -> str:
         "11. If you call `get_product_prices_for_chart`, return ONLY the raw JSON from the tool as the final answer.\n"
         "12. For price ranking use `find_product_by_price_rank`; for discount ranking use `find_product_by_discount_rank`.\n"
         "13. For budget questions (e.g., 'what can I buy for $X', 'under 200'), call `find_products_within_budget` with the numeric budget and optional category; then list items with name/title, `_id`, and price.\n"
+        "13a. IMPORTANT: When a user mentions a category (like 'phones', 'toys', 'electronics'), first call `find_semantic_category_match` to find the most similar category in the database. If no semantic match is found, try without the category filter or suggest available categories.\n"
+        "13b. IMPORTANT: When a user mentions ordering terms (like 'most expensive', 'cheapest', 'biggest discount'), the system will automatically use semantic matching to understand the intent. You can also call `find_semantic_order_match` directly if needed.\n"
         "14. POLICY QUESTIONS ROUTING: For any question about shipping, delivery times, order processing time, returns, refunds, exchanges, payment terms, privacy, warranties, or any store policy, you MUST FIRST call `answer_policy_pdf` with the user's question. Then summarize the contexts, cite pages in parentheses like (Policy p. X), and avoid fabrications. If the policy tool returns no contexts, state that the policy does not specify.\n"
+        "15. IMPORTANT: If a tool returns a message like 'No products found within the given budget' or 'No products found', DO NOT retry the same tool. Instead, provide a helpful response suggesting alternative approaches (e.g., try a different category, increase budget, or search by name).\n"
+        "16. NEVER call the same tool more than 3 times in a row. If a tool fails or returns no results, try a different approach or inform the user that no products match their criteria.\n"
     )
 
 
